@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Entry } from '@/lib/supabase';
+import { Entry, DailyResult } from '@/lib/supabase';
 
 const FLAGS: Record<string, string> = {
   AU: '🇦🇺', CA: '🇨🇦', UK: '🇬🇧', GB: '🇬🇧',
@@ -17,27 +17,49 @@ function getMonthKey(date: string) {
   return date.slice(0, 7);
 }
 
-export default function ByGeoView({ entries }: { entries: Entry[] }) {
+export default function ByGeoView({
+  entries,
+  dailyResults,
+}: {
+  entries: Entry[];
+  dailyResults: DailyResult[];
+}) {
   const months = useMemo(() => {
-    const set = new Set(entries.map((e) => getMonthKey(e.date)));
+    const set = new Set<string>([
+      ...entries.map((e) => getMonthKey(e.date)),
+      ...dailyResults.map((r) => getMonthKey(r.date)),
+    ]);
     return Array.from(set).sort().reverse();
-  }, [entries]);
+  }, [entries, dailyResults]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(months[0] || '');
 
   const byGeo = useMemo(() => {
-    const filtered = entries.filter((e) => getMonthKey(e.date) === selectedMonth);
-    const map = new Map<string, { country: string; spend: number; deposits: number; revenue: number }>();
+    const map = new Map<
+      string,
+      { country: string; spend: number; deposits: number; revenue: number }
+    >();
 
-    filtered.forEach((e) => {
-      const key = e.geo_code || 'XX';
-      const country = e.offers?.country_name || key;
-      const cur = map.get(key) || { country, spend: 0, deposits: 0, revenue: 0 };
-      cur.spend += e.spend;
-      cur.deposits += e.deposits;
-      cur.revenue += e.deposits * e.payout_per_dep;
-      map.set(key, cur);
-    });
+    entries
+      .filter((e) => getMonthKey(e.date) === selectedMonth && e.geo_code)
+      .forEach((e) => {
+        const key = e.geo_code!;
+        const country = e.offers?.country_name || key;
+        const cur = map.get(key) || { country, spend: 0, deposits: 0, revenue: 0 };
+        cur.spend += e.spend;
+        map.set(key, cur);
+      });
+
+    dailyResults
+      .filter((r) => getMonthKey(r.date) === selectedMonth)
+      .forEach((r) => {
+        const key = r.offers?.geo_code || 'XX';
+        const country = r.offers?.country_name || key;
+        const cur = map.get(key) || { country, spend: 0, deposits: 0, revenue: 0 };
+        cur.deposits += r.deposits;
+        cur.revenue += r.deposits * r.payout_per_dep;
+        map.set(key, cur);
+      });
 
     return Array.from(map.entries())
       .map(([code, v]) => ({
@@ -47,7 +69,7 @@ export default function ByGeoView({ entries }: { entries: Entry[] }) {
         roi: v.spend > 0 ? ((v.revenue - v.spend) / v.spend) * 100 : 0,
       }))
       .sort((a, b) => b.spend - a.spend);
-  }, [entries, selectedMonth]);
+  }, [entries, dailyResults, selectedMonth]);
 
   const formatMonthLabel = (m: string) => {
     const [year, mm] = m.split('-');
@@ -96,7 +118,7 @@ export default function ByGeoView({ entries }: { entries: Entry[] }) {
                 {g.profit >= 0 ? '+' : ''}{formatMoney(g.profit)}
               </div>
               <div className="muted" style={{ fontSize: 12 }}>
-                ROI: {g.roi.toFixed(0)}%
+                ROI: {g.spend > 0 ? `${g.roi.toFixed(0)}%` : '—'}
               </div>
             </div>
           </div>
