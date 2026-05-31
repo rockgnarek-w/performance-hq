@@ -31,3 +31,15 @@ export type Entry = {
   updated_at: string;
   offers?: Offer;
 };
+
+export type DailyResult = {
+  id: number;
+  date: string;
+  offer_id: number;
+  deposits: number;
+  payout_per_dep: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  offers?: Offer;
+};
