@@ -1,53 +1,109 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Entry } from '@/lib/supabase';
+import { Entry, DailyResult } from '@/lib/supabase';
 
 function formatMoney(n: number) {
   return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
 function getMonthKey(date: string) {
-  return date.slice(0, 7); // 'YYYY-MM'
+  return date.slice(0, 7);
 }
 
-export default function MonthlyView({ entries }: { entries: Entry[] }) {
+export default function MonthlyView({
+  entries,
+  dailyResults,
+}: {
+  entries: Entry[];
+  dailyResults: DailyResult[];
+}) {
   const months = useMemo(() => {
-    const set = new Set(entries.map((e) => getMonthKey(e.date)));
+    const set = new Set<string>([
+      ...entries.map((e) => getMonthKey(e.date)),
+      ...dailyResults.map((r) => getMonthKey(r.date)),
+    ]);
     return Array.from(set).sort().reverse();
-  }, [entries]);
+  }, [entries, dailyResults]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>(months[0] || '');
 
-  const monthEntries = useMemo(
-    () => entries.filter((e) => getMonthKey(e.date) === selectedMonth),
-    [entries, selectedMonth]
-  );
+  // Spend from entries (auto-imported from FB), Revenue from daily_results (manual)
+  const monthSpendByOffer = useMemo(() => {
+    const map = new Map<number, number>();
+    entries
+      .filter((e) => getMonthKey(e.date) === selectedMonth && e.offer_id !== null)
+      .forEach((e) => {
+        const cur = map.get(e.offer_id!) || 0;
+        map.set(e.offer_id!, cur + e.spend);
+      });
+    return map;
+  }, [entries, selectedMonth]);
+
+  const monthResultsByOffer = useMemo(() => {
+    const map = new Map<number, { deposits: number; revenue: number; name: string }>();
+    dailyResults
+      .filter((r) => getMonthKey(r.date) === selectedMonth)
+      .forEach((r) => {
+        const cur = map.get(r.offer_id) || { deposits: 0, revenue: 0, name: r.offers?.offer_name || '???' };
+        cur.deposits += r.deposits;
+        cur.revenue += r.deposits * r.payout_per_dep;
+        cur.name = r.offers?.offer_name || cur.name;
+        map.set(r.offer_id, cur);
+      });
+    return map;
+  }, [dailyResults, selectedMonth]);
+
+  // Combine: every offer that has spend OR results
+  const byOffer = useMemo(() => {
+    const ids = new Set<number>([
+      ...Array.from(monthSpendByOffer.keys()),
+      ...Array.from(monthResultsByOffer.keys()),
+    ]);
+    const rows: Array<{
+      name: string;
+      spend: number;
+      deposits: number;
+      revenue: number;
+      profit: number;
+      roi: number;
+    }> = [];
+
+    // Try to find name from entries first, then daily_results
+    const nameMap = new Map<number, string>();
+    entries.forEach((e) => {
+      if (e.offer_id && e.offers?.offer_name) nameMap.set(e.offer_id, e.offers.offer_name);
+    });
+    dailyResults.forEach((r) => {
+      if (r.offers?.offer_name && !nameMap.has(r.offer_id)) nameMap.set(r.offer_id, r.offers.offer_name);
+    });
+
+    Array.from(ids).forEach((id) => {
+      const spend = monthSpendByOffer.get(id) || 0;
+      const results = monthResultsByOffer.get(id) || { deposits: 0, revenue: 0, name: '???' };
+      const profit = results.revenue - spend;
+      const roi = spend > 0 ? (profit / spend) * 100 : 0;
+      rows.push({
+        name: nameMap.get(id) || results.name,
+        spend,
+        deposits: results.deposits,
+        revenue: results.revenue,
+        profit,
+        roi,
+      });
+    });
+
+    return rows.sort((a, b) => b.spend - a.spend);
+  }, [monthSpendByOffer, monthResultsByOffer, entries, dailyResults]);
 
   const stats = useMemo(() => {
-    const spend = monthEntries.reduce((a, e) => a + e.spend, 0);
-    const deposits = monthEntries.reduce((a, e) => a + e.deposits, 0);
-    const revenue = monthEntries.reduce((a, e) => a + e.deposits * e.payout_per_dep, 0);
+    const spend = byOffer.reduce((a, r) => a + r.spend, 0);
+    const deposits = byOffer.reduce((a, r) => a + r.deposits, 0);
+    const revenue = byOffer.reduce((a, r) => a + r.revenue, 0);
     const profit = revenue - spend;
     const roi = spend > 0 ? (profit / spend) * 100 : 0;
     return { spend, deposits, revenue, profit, roi };
-  }, [monthEntries]);
-
-  // group by offer
-  const byOffer = useMemo(() => {
-    const map = new Map<string, { spend: number; deposits: number; revenue: number }>();
-    monthEntries.forEach((e) => {
-      const key = e.offers?.offer_name || '???';
-      const cur = map.get(key) || { spend: 0, deposits: 0, revenue: 0 };
-      cur.spend += e.spend;
-      cur.deposits += e.deposits;
-      cur.revenue += e.deposits * e.payout_per_dep;
-      map.set(key, cur);
-    });
-    return Array.from(map.entries())
-      .map(([name, v]) => ({ name, ...v, profit: v.revenue - v.spend, roi: v.spend > 0 ? ((v.revenue - v.spend) / v.spend) * 100 : 0 }))
-      .sort((a, b) => b.spend - a.spend);
-  }, [monthEntries]);
+  }, [byOffer]);
 
   if (months.length === 0) {
     return <div className="card"><p className="muted">No data yet.</p></div>;
@@ -123,7 +179,7 @@ export default function MonthlyView({ entries }: { entries: Entry[] }) {
                   {o.profit >= 0 ? '+' : ''}{formatMoney(o.profit)}
                 </td>
                 <td className={o.profit >= 0 ? 'profit-positive' : 'profit-negative'}>
-                  {o.roi.toFixed(0)}%
+                  {o.spend > 0 ? `${o.roi.toFixed(0)}%` : '—'}
                 </td>
               </tr>
             ))}
