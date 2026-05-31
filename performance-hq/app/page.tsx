@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase, Entry, Offer, DailyResult } from '@/lib/supabase';
 import AddEntryForm from '@/components/AddEntryForm';
 import EntriesList from '@/components/EntriesList';
@@ -13,11 +14,38 @@ import OffersView from '@/components/OffersView';
 type View = 'add' | 'daily' | 'monthly' | 'by-geo' | 'accounts' | 'offers';
 
 export default function Home() {
+  const router = useRouter();
   const [view, setView] = useState<View>('daily');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [dailyResults, setDailyResults] = useState<DailyResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Проверка авторизации при загрузке
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+        return;
+      }
+      setUserEmail(session.user.email || null);
+      setAuthChecking(false);
+      loadData();
+    };
+    checkAuth();
+
+    // Слушаем изменения статуса авторизации
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.push('/login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [router]);
 
   const loadData = async () => {
     setLoading(true);
@@ -45,9 +73,20 @@ export default function Home() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const handleLogout = async () => {
+    if (!confirm('Sign out?')) return;
+    await supabase.auth.signOut();
+    router.push('/login');
+  };
+
+  // Показываем пустой экран пока проверяем авторизацию
+  if (authChecking) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p className="muted">Authenticating...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
@@ -55,6 +94,11 @@ export default function Home() {
         <div>
           <div className="brand">● PERFORMANCE HQ</div>
           <h1 className="title">Media Buyer Dashboard</h1>
+          {userEmail && (
+            <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+              {userEmail} · <a onClick={handleLogout} style={{ cursor: 'pointer', textDecoration: 'underline' }}>Sign out</a>
+            </div>
+          )}
         </div>
         <div className="nav">
           <button
