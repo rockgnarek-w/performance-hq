@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { supabase, Entry } from '@/lib/supabase';
 
 const FLAGS: Record<string, string> = {
@@ -17,6 +18,19 @@ function formatDate(d: string) {
   return `${m}-${day}`;
 }
 
+type AggregatedRow = {
+  date: string;
+  account_id_fb: string;
+  geo_code: string | null;
+  offer_id: number | null;
+  offer_name: string;
+  crm_id: string;
+  spend: number;
+  campaign_name: string;
+  entry_ids: number[];
+  source: string;
+};
+
 export default function EntriesList({
   entries,
   onChanged,
@@ -24,24 +38,55 @@ export default function EntriesList({
   entries: Entry[];
   onChanged: () => void;
 }) {
-  const handleDelete = async (id: number) => {
-    if (!confirm('Delete this entry?')) return;
-    await supabase.from('entries').delete().eq('id', id);
+  const aggregated = useMemo<AggregatedRow[]>(() => {
+    const map = new Map<string, AggregatedRow>();
+
+    for (const e of entries) {
+      const key = `${e.date}|${e.account_id_fb || ''}|${e.offer_id ?? 'null'}`;
+      const existing = map.get(key);
+
+      if (existing) {
+        existing.spend += e.spend;
+        existing.entry_ids.push(e.id);
+        if (e.campaign_name && (!existing.campaign_name || e.campaign_name < existing.campaign_name)) {
+          existing.campaign_name = e.campaign_name;
+        }
+      } else {
+        map.set(key, {
+          date: e.date,
+          account_id_fb: e.account_id_fb || '',
+          geo_code: e.geo_code,
+          offer_id: e.offer_id,
+          offer_name: e.offers?.offer_name || 'unmapped',
+          crm_id: e.offers?.crm_id || '—',
+          spend: e.spend,
+          campaign_name: e.campaign_name || '',
+          entry_ids: [e.id],
+          source: e.source,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      if (a.account_id_fb !== b.account_id_fb) return a.account_id_fb.localeCompare(b.account_id_fb);
+      return a.crm_id.localeCompare(b.crm_id);
+    });
+  }, [entries]);
+
+  const handleDelete = async (ids: number[]) => {
+    const count = ids.length;
+    if (!confirm(`Delete ${count} ${count === 1 ? 'entry' : 'entries'} (whole group)?`)) return;
+    await supabase.from('entries').delete().in('id', ids);
     onChanged();
   };
-
-  // Сортировка: дата DESC, внутри даты по CRM ID
-  const sorted = [...entries].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    const aCrm = a.offers?.crm_id || '';
-    const bCrm = b.offers?.crm_id || '';
-    return aCrm.localeCompare(bCrm);
-  });
 
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div className="card-title" style={{ margin: 0 }}>Entries ({entries.length})</div>
+        <div className="card-title" style={{ margin: 0 }}>
+          Entries ({aggregated.length} groups / {entries.length} raw)
+        </div>
       </div>
 
       {entries.length === 0 ? (
@@ -52,6 +97,7 @@ export default function EntriesList({
             <thead>
               <tr>
                 <th>Date</th>
+                <th>Account ID</th>
                 <th>Geo</th>
                 <th>Offer</th>
                 <th>CRM ID</th>
@@ -62,22 +108,37 @@ export default function EntriesList({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((e) => {
-                const flag = e.geo_code ? FLAGS[e.geo_code] || '🏳️' : '';
-                const crmId = e.offers?.crm_id || <span className="muted">—</span>;
-                const offerName = e.offers?.offer_name || <span className="muted">unmapped</span>;
+              {aggregated.map((r, idx) => {
+                const flag = r.geo_code ? FLAGS[r.geo_code] || '🏳️' : '';
+                const groupSize = r.entry_ids.length;
 
                 return (
-                  <tr key={e.id}>
-                    <td>{formatDate(e.date)}</td>
-                    <td>{flag} {e.geo_code || <span className="muted">—</span>}</td>
-                    <td>{offerName}</td>
-                    <td style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{crmId}</td>
-                    <td>{formatMoney(e.spend)}</td>
-                    <td className="muted" style={{ fontSize: 12 }}>{e.campaign_name || '—'}</td>
-                    <td className="muted" style={{ fontSize: 11 }}>{e.source}</td>
+                  <tr key={idx}>
+                    <td>{formatDate(r.date)}</td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                      {r.account_id_fb || <span className="muted">—</span>}
+                    </td>
+                    <td>{flag} {r.geo_code || <span className="muted">—</span>}</td>
+                    <td>{r.offer_name}</td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>
+                      {r.crm_id}
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{formatMoney(r.spend)}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {r.campaign_name || '—'}
+                      {groupSize > 1 && (
+                        <span className="muted" style={{ marginLeft: 8, fontSize: 11, opacity: 0.6 }}>
+                          (+{groupSize - 1})
+                        </span>
+                      )}
+                    </td>
+                    <td className="muted" style={{ fontSize: 11 }}>{r.source}</td>
                     <td>
-                      <button onClick={() => handleDelete(e.id)} title="Delete" style={{ opacity: 0.4 }}>
+                      <button
+                        onClick={() => handleDelete(r.entry_ids)}
+                        title={`Delete ${groupSize} entries`}
+                        style={{ opacity: 0.4 }}
+                      >
                         🗑
                       </button>
                     </td>
