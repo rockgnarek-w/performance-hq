@@ -9,7 +9,7 @@ const FLAGS: Record<string, string> = {
 };
 
 function formatMoney(n: number) {
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function formatDate(d: string) {
@@ -30,6 +30,14 @@ export default function EntriesList({
     onChanged();
   };
 
+  // Сортировка: дата DESC, внутри даты по CRM ID
+  const sorted = [...entries].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const aCrm = a.offers?.crm_id || '';
+    const bCrm = b.offers?.crm_id || '';
+    return aCrm.localeCompare(bCrm);
+  });
+
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
@@ -46,41 +54,27 @@ export default function EntriesList({
                 <th>Date</th>
                 <th>Geo</th>
                 <th>Offer</th>
+                <th>CRM ID</th>
                 <th>Spend</th>
-                <th>Deps</th>
-                <th>Payout</th>
-                <th>Revenue</th>
-                <th>CPA</th>
-                <th>Profit</th>
-                <th>ROI</th>
-                <th>Src</th>
+                <th>Campaign Name</th>
+                <th>Source</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => {
-                const revenue = e.deposits * e.payout_per_dep;
-                const profit = revenue - e.spend;
-                const roi = e.spend > 0 ? (profit / e.spend) * 100 : 0;
-                const cpa = e.deposits > 0 ? e.spend / e.deposits : null;
+              {sorted.map((e) => {
                 const flag = e.geo_code ? FLAGS[e.geo_code] || '🏳️' : '';
+                const crmId = e.offers?.crm_id || <span className="muted">—</span>;
+                const offerName = e.offers?.offer_name || <span className="muted">unmapped</span>;
 
                 return (
                   <tr key={e.id}>
                     <td>{formatDate(e.date)}</td>
-                    <td>{flag} {e.geo_code}</td>
-                    <td>{e.offers?.offer_name || '—'}</td>
+                    <td>{flag} {e.geo_code || <span className="muted">—</span>}</td>
+                    <td>{offerName}</td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontWeight: 600 }}>{crmId}</td>
                     <td>{formatMoney(e.spend)}</td>
-                    <td>{e.deposits}</td>
-                    <td>{formatMoney(revenue)}</td>
-                    <td>{formatMoney(revenue)}</td>
-                    <td>{cpa ? formatMoney(cpa) : <span className="muted">—</span>}</td>
-                    <td className={profit >= 0 ? 'profit-positive' : 'profit-negative'}>
-                      {profit >= 0 ? '+' : ''}{formatMoney(profit)}
-                    </td>
-                    <td className={profit >= 0 ? 'profit-positive' : 'profit-negative'}>
-                      {roi.toFixed(0)}%
-                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>{e.campaign_name || '—'}</td>
                     <td className="muted" style={{ fontSize: 11 }}>{e.source}</td>
                     <td>
                       <button onClick={() => handleDelete(e.id)} title="Delete" style={{ opacity: 0.4 }}>
