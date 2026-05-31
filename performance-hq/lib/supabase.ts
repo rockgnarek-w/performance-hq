@@ -43,3 +43,11 @@ export type DailyResult = {
   updated_at: string;
   offers?: Offer;
 };
+
+export type Account = {
+  id: number;
+  account_id_fb: string;
+  social_name: string | null;
+  status: string;
+  created_at: string;
+};
