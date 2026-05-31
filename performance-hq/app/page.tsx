@@ -7,8 +7,10 @@ import EntriesList from '@/components/EntriesList';
 import MonthlyView from '@/components/MonthlyView';
 import ByGeoView from '@/components/ByGeoView';
 import DailyView from '@/components/DailyView';
+import AccountsView from '@/components/AccountsView';
+import OffersView from '@/components/OffersView';
 
-type View = 'add' | 'daily' | 'monthly' | 'by-geo';
+type View = 'add' | 'daily' | 'monthly' | 'by-geo' | 'accounts' | 'offers';
 
 export default function Home() {
   const [view, setView] = useState<View>('daily');
@@ -74,6 +76,18 @@ export default function Home() {
             By Geo
           </button>
           <button
+            className={`nav-btn ${view === 'accounts' ? 'active' : ''}`}
+            onClick={() => setView('accounts')}
+          >
+            Accounts
+          </button>
+          <button
+            className={`nav-btn ${view === 'offers' ? 'active' : ''}`}
+            onClick={() => setView('offers')}
+          >
+            Offers
+          </button>
+          <button
             className={`nav-btn ${view === 'add' ? 'active' : ''}`}
             onClick={() => setView('add')}
           >
@@ -82,7 +96,7 @@ export default function Home() {
         </div>
       </div>
 
-      {loading ? (
+      {loading && view !== 'accounts' && view !== 'offers' ? (
         <div className="card">
           <p className="muted">Loading data...</p>
         </div>
@@ -91,6 +105,8 @@ export default function Home() {
           {view === 'daily' && <DailyView entries={entries} offers={offers} />}
           {view === 'monthly' && <MonthlyView entries={entries} dailyResults={dailyResults} />}
           {view === 'by-geo' && <ByGeoView entries={entries} dailyResults={dailyResults} />}
+          {view === 'accounts' && <AccountsView />}
+          {view === 'offers' && <OffersView />}
           {view === 'add' && (
             <>
               <AddEntryForm offers={offers} onAdded={loadData} />
