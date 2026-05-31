@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase, Entry, Offer } from '@/lib/supabase';
+import { supabase, Entry, Offer, DailyResult } from '@/lib/supabase';
 import AddEntryForm from '@/components/AddEntryForm';
 import EntriesList from '@/components/EntriesList';
 import MonthlyView from '@/components/MonthlyView';
 import ByGeoView from '@/components/ByGeoView';
+import DailyView from '@/components/DailyView';
 
-type View = 'add' | 'monthly' | 'by-geo';
+type View = 'add' | 'daily' | 'monthly' | 'by-geo';
 
 export default function Home() {
-  const [view, setView] = useState<View>('add');
+  const [view, setView] = useState<View>('daily');
   const [entries, setEntries] = useState<Entry[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [dailyResults, setDailyResults] = useState<DailyResult[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
@@ -21,7 +23,7 @@ export default function Home() {
       .from('entries')
       .select('*, offers(*)')
       .order('date', { ascending: false })
-      .limit(200);
+      .limit(2000);
 
     const { data: offersData } = await supabase
       .from('offers')
@@ -29,8 +31,15 @@ export default function Home() {
       .eq('active', true)
       .order('country_name');
 
+    const { data: resultsData } = await supabase
+      .from('daily_results')
+      .select('*, offers(*)')
+      .order('date', { ascending: false })
+      .limit(2000);
+
     setEntries(entriesData || []);
     setOffers(offersData || []);
+    setDailyResults(resultsData || []);
     setLoading(false);
   };
 
@@ -47,10 +56,10 @@ export default function Home() {
         </div>
         <div className="nav">
           <button
-            className={`nav-btn ${view === 'add' ? 'active' : ''}`}
-            onClick={() => setView('add')}
+            className={`nav-btn ${view === 'daily' ? 'active' : ''}`}
+            onClick={() => setView('daily')}
           >
-            + Add
+            Daily
           </button>
           <button
             className={`nav-btn ${view === 'monthly' ? 'active' : ''}`}
@@ -64,6 +73,12 @@ export default function Home() {
           >
             By Geo
           </button>
+          <button
+            className={`nav-btn ${view === 'add' ? 'active' : ''}`}
+            onClick={() => setView('add')}
+          >
+            + Add
+          </button>
         </div>
       </div>
 
@@ -73,14 +88,15 @@ export default function Home() {
         </div>
       ) : (
         <>
+          {view === 'daily' && <DailyView entries={entries} offers={offers} />}
+          {view === 'monthly' && <MonthlyView entries={entries} dailyResults={dailyResults} />}
+          {view === 'by-geo' && <ByGeoView entries={entries} dailyResults={dailyResults} />}
           {view === 'add' && (
             <>
               <AddEntryForm offers={offers} onAdded={loadData} />
               <EntriesList entries={entries} onChanged={loadData} />
             </>
           )}
-          {view === 'monthly' && <MonthlyView entries={entries} />}
-          {view === 'by-geo' && <ByGeoView entries={entries} />}
         </>
       )}
     </div>
