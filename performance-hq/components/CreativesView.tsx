@@ -20,9 +20,7 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
   const [showUpload, setShowUpload] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Фильтры
   const [filterOffer, setFilterOffer] = useState<string>('all');
-  const [filterAuthor, setFilterAuthor] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('active');
   const [search, setSearch] = useState('');
 
@@ -38,7 +36,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
 
   useEffect(() => { load(); }, []);
 
-  // Метрики per-creative из entries
   const metricsByCreative = useMemo(() => {
     const map = new Map<string, { spend: number; campaigns: number }>();
     for (const e of entries) {
@@ -51,29 +48,20 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
     return map;
   }, [entries]);
 
-  // Доступные авторы для фильтра
-  const authors = useMemo(() => {
-    const set = new Set<string>();
-    creatives.forEach((c) => c.author && set.add(c.author));
-    return Array.from(set).sort();
-  }, [creatives]);
-
-  // Фильтрация
   const filtered = useMemo(() => {
     return creatives.filter((c) => {
       if (filterStatus !== 'all' && c.status !== filterStatus) return false;
       if (filterOffer !== 'all' && c.offer_id !== parseInt(filterOffer)) return false;
-      if (filterAuthor !== 'all' && c.author !== filterAuthor) return false;
       if (search) {
         const q = search.toLowerCase();
-        const inFields = [c.creative_id, c.notes, c.file_name, c.author]
+        const inFields = [c.creative_id, c.notes, c.file_name]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q));
         if (!inFields) return false;
       }
       return true;
     });
-  }, [creatives, filterOffer, filterAuthor, filterStatus, search]);
+  }, [creatives, filterOffer, filterStatus, search]);
 
   const handleCopy = async (id: string) => {
     await navigator.clipboard.writeText(id);
@@ -90,7 +78,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
   const handleDelete = async (creative: Creative) => {
     if (!confirm(`Delete creative "${creative.creative_id}"? This will also delete the file from storage.`)) return;
 
-    // Удаляем файл из storage
     if (creative.file_url) {
       const filename = creative.file_url.split('/').pop();
       if (filename) {
@@ -102,7 +89,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
     load();
   };
 
-  // Счётчики
   const counts = {
     active: creatives.filter((c) => c.status === 'active').length,
     archived: creatives.filter((c) => c.status === 'archived').length,
@@ -111,7 +97,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
 
   return (
     <>
-      {/* Stat cards */}
       <div className="stats-grid">
         <div className="stat">
           <div className="stat-label">Active</div>
@@ -127,12 +112,11 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
         </div>
       </div>
 
-      {/* Filters + Upload */}
       <div className="card">
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="🔍 Search by ID, notes, author..."
+            placeholder="🔍 Search by ID, notes, filename..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ flex: 1, minWidth: 200, padding: '8px 12px' }}
@@ -144,13 +128,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
               <option key={o.id} value={o.id}>
                 {o.geo_code} · {o.offer_name}
               </option>
-            ))}
-          </select>
-
-          <select value={filterAuthor} onChange={(e) => setFilterAuthor(e.target.value)} style={{ width: 'auto', padding: '8px 12px' }}>
-            <option value="all">All authors</option>
-            {authors.map((a) => (
-              <option key={a} value={a}>{a}</option>
             ))}
           </select>
 
@@ -166,7 +143,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
         </div>
       </div>
 
-      {/* Grid */}
       <div className="card">
         <div className="card-title">
           Creatives ({filtered.length}{filtered.length !== creatives.length ? ` / ${creatives.length}` : ''})
@@ -202,7 +178,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
                     opacity: c.status === 'archived' ? 0.5 : 1,
                   }}
                 >
-                  {/* Preview */}
                   <div style={{
                     aspectRatio: '1',
                     background: '#000',
@@ -222,9 +197,7 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
                     )}
                   </div>
 
-                  {/* Info */}
                   <div style={{ padding: 12 }}>
-                    {/* ID with copy */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                       <span
                         onClick={() => handleCopy(c.creative_id)}
@@ -248,7 +221,6 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
                       )}
                     </div>
 
-                    {/* Metrics */}
                     {metrics ? (
                       <div style={{ display: 'flex', gap: 12, fontSize: 12, marginBottom: 8 }}>
                         <div>
@@ -266,12 +238,10 @@ export default function CreativesView({ offers, entries }: { offers: Offer[]; en
                       </div>
                     )}
 
-                    {/* Meta */}
                     <div className="muted" style={{ fontSize: 10, marginBottom: 8 }}>
-                      {c.author} · {new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                      {new Date(c.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                     </div>
 
-                    {/* Actions */}
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button
                         onClick={() => handleArchive(c.id, c.status)}
