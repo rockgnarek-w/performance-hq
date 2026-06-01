@@ -3,8 +3,6 @@
 import { useState, useRef } from 'react';
 import { supabase, Offer } from '@/lib/supabase';
 
-const AUTHOR_OPTIONS = ['Юлия Янчук', 'Ян Куприн', 'Феодора', 'unknown'];
-
 // Генератор короткого уникального ID (5 символов: буквы+цифры)
 function generateCreativeId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -28,7 +26,6 @@ export default function CreativeUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [offerId, setOfferId] = useState<string>('');
-  const [author, setAuthor] = useState('Юлия Янчук');
   const [notes, setNotes] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +42,6 @@ export default function CreativeUploadModal({
     setFile(f);
     setError(null);
 
-    // Локальный превью для UI
     if (f.type.startsWith('image/') || f.type.startsWith('video/')) {
       const url = URL.createObjectURL(f);
       setPreviewLocal(url);
@@ -61,7 +57,7 @@ export default function CreativeUploadModal({
     setUploading(true);
     setError(null);
 
-    // 1. Генерируем уникальный creative_id (с проверкой что не занят)
+    // 1. Генерируем уникальный creative_id
     let creativeId = '';
     for (let attempt = 0; attempt < 5; attempt++) {
       const candidate = generateCreativeId();
@@ -113,16 +109,16 @@ export default function CreativeUploadModal({
     const selectedOffer = offers.find((o) => o.id === parseInt(offerId));
     const geo = selectedOffer?.geo_code || null;
 
-    // 6. Создаём запись в creatives
+    // 6. Создаём запись в creatives (author=null, без привязки к FB-аккаунтам)
     const { error: insertError } = await supabase.from('creatives').insert({
       creative_id: creativeId,
       offer_id: offerId ? parseInt(offerId) : null,
       geo_code: geo,
       file_url: publicUrl,
-      preview_url: publicUrl, // для MVP — то же что file_url
+      preview_url: publicUrl,
       file_type: fileType,
       file_name: file.name,
-      author,
+      author: null,
       notes: notes || null,
       status: 'active',
     });
@@ -170,7 +166,6 @@ export default function CreativeUploadModal({
           <button onClick={onClose} style={{ background: 'transparent', fontSize: 20, padding: 0 }}>✕</button>
         </div>
 
-        {/* File picker */}
         <div style={{ marginBottom: 16 }}>
           <label className="label">File (image or video, max 50 MB)</label>
           <input
@@ -182,7 +177,6 @@ export default function CreativeUploadModal({
           />
         </div>
 
-        {/* Preview */}
         {previewLocal && file && (
           <div style={{ marginBottom: 16, textAlign: 'center' }}>
             {file.type.startsWith('image/') ? (
@@ -196,7 +190,6 @@ export default function CreativeUploadModal({
           </div>
         )}
 
-        {/* Offer */}
         <div style={{ marginBottom: 16 }}>
           <label className="label">Offer (optional)</label>
           <select value={offerId} onChange={(e) => setOfferId(e.target.value)}>
@@ -209,23 +202,12 @@ export default function CreativeUploadModal({
           </select>
         </div>
 
-        {/* Author */}
-        <div style={{ marginBottom: 16 }}>
-          <label className="label">Author</label>
-          <select value={author} onChange={(e) => setAuthor(e.target.value)}>
-            {AUTHOR_OPTIONS.map((a) => (
-              <option key={a} value={a}>{a}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Notes */}
         <div style={{ marginBottom: 20 }}>
           <label className="label">Notes (optional)</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="UGC style, talking head, etc."
+            placeholder="UGC style, talking head, winners list, etc."
             rows={2}
             style={{ width: '100%', resize: 'vertical' }}
           />
