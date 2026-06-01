@@ -22,6 +22,7 @@ export type Entry = {
   campaign_name: string | null;
   geo_code: string | null;
   offer_id: number | null;
+  creative_id: string | null;
   spend: number;
   deposits: number;
   payout_per_dep: number;
@@ -50,4 +51,20 @@ export type Account = {
   social_name: string | null;
   status: string;
   created_at: string;
+};
+
+export type Creative = {
+  id: number;
+  creative_id: string;
+  offer_id: number | null;
+  geo_code: string | null;
+  file_url: string | null;
+  preview_url: string | null;
+  file_type: string;
+  file_name: string | null;
+  author: string | null;
+  notes: string | null;
+  status: string;
+  created_at: string;
+  offers?: Offer;
 };
