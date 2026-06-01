@@ -10,8 +10,9 @@ import ByGeoView from '@/components/ByGeoView';
 import DailyView from '@/components/DailyView';
 import AccountsView from '@/components/AccountsView';
 import OffersView from '@/components/OffersView';
+import CreativesView from '@/components/CreativesView';
 
-type View = 'add' | 'daily' | 'monthly' | 'by-geo' | 'accounts' | 'offers';
+type View = 'add' | 'daily' | 'monthly' | 'by-geo' | 'accounts' | 'offers' | 'creatives';
 
 export default function Home() {
   const router = useRouter();
@@ -23,7 +24,6 @@ export default function Home() {
   const [authChecking, setAuthChecking] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  // Проверка авторизации при загрузке
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -37,7 +37,6 @@ export default function Home() {
     };
     checkAuth();
 
-    // Слушаем изменения статуса авторизации
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         router.push('/login');
@@ -79,7 +78,6 @@ export default function Home() {
     router.push('/login');
   };
 
-  // Показываем пустой экран пока проверяем авторизацию
   if (authChecking) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -101,46 +99,17 @@ export default function Home() {
           )}
         </div>
         <div className="nav">
-          <button
-            className={`nav-btn ${view === 'daily' ? 'active' : ''}`}
-            onClick={() => setView('daily')}
-          >
-            Daily
-          </button>
-          <button
-            className={`nav-btn ${view === 'monthly' ? 'active' : ''}`}
-            onClick={() => setView('monthly')}
-          >
-            Monthly
-          </button>
-          <button
-            className={`nav-btn ${view === 'by-geo' ? 'active' : ''}`}
-            onClick={() => setView('by-geo')}
-          >
-            By Geo
-          </button>
-          <button
-            className={`nav-btn ${view === 'accounts' ? 'active' : ''}`}
-            onClick={() => setView('accounts')}
-          >
-            Accounts
-          </button>
-          <button
-            className={`nav-btn ${view === 'offers' ? 'active' : ''}`}
-            onClick={() => setView('offers')}
-          >
-            Offers
-          </button>
-          <button
-            className={`nav-btn ${view === 'add' ? 'active' : ''}`}
-            onClick={() => setView('add')}
-          >
-            + Add
-          </button>
+          <button className={`nav-btn ${view === 'daily' ? 'active' : ''}`} onClick={() => setView('daily')}>Daily</button>
+          <button className={`nav-btn ${view === 'monthly' ? 'active' : ''}`} onClick={() => setView('monthly')}>Monthly</button>
+          <button className={`nav-btn ${view === 'by-geo' ? 'active' : ''}`} onClick={() => setView('by-geo')}>By Geo</button>
+          <button className={`nav-btn ${view === 'creatives' ? 'active' : ''}`} onClick={() => setView('creatives')}>Creatives</button>
+          <button className={`nav-btn ${view === 'accounts' ? 'active' : ''}`} onClick={() => setView('accounts')}>Accounts</button>
+          <button className={`nav-btn ${view === 'offers' ? 'active' : ''}`} onClick={() => setView('offers')}>Offers</button>
+          <button className={`nav-btn ${view === 'add' ? 'active' : ''}`} onClick={() => setView('add')}>+ Add</button>
         </div>
       </div>
 
-      {loading && view !== 'accounts' && view !== 'offers' ? (
+      {loading && view !== 'accounts' && view !== 'offers' && view !== 'creatives' ? (
         <div className="card">
           <p className="muted">Loading data...</p>
         </div>
@@ -149,6 +118,7 @@ export default function Home() {
           {view === 'daily' && <DailyView entries={entries} offers={offers} />}
           {view === 'monthly' && <MonthlyView entries={entries} dailyResults={dailyResults} />}
           {view === 'by-geo' && <ByGeoView entries={entries} dailyResults={dailyResults} />}
+          {view === 'creatives' && <CreativesView offers={offers} entries={entries} />}
           {view === 'accounts' && <AccountsView />}
           {view === 'offers' && <OffersView />}
           {view === 'add' && (
