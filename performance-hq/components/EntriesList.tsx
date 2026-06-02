@@ -10,7 +10,7 @@ const FLAGS: Record<string, string> = {
 };
 
 function formatMoney(n: number) {
-  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace('.', ',')}`;
 }
 
 type CampaignRow = {
@@ -141,6 +141,7 @@ export default function EntriesList({
           <table className="entries-table">
             <thead>
               <tr>
+                <th>ID</th>
                 <th>Date</th>
                 <th>Geo / Offer</th>
                 <th>Campaign</th>
@@ -153,8 +154,14 @@ export default function EntriesList({
             <tbody>
               {grouped.slice(0, 500).map((r, idx) => {
                 const flag = r.geo_code ? FLAGS[r.geo_code] || '🏳️' : '';
+                const idDisplay = r.ids.length === 1 
+                  ? `#${r.ids[0]}` 
+                  : `#${Math.min(...r.ids)}–${Math.max(...r.ids)}`;
                 return (
                   <tr key={`${r.date}-${r.campaign_name}-${idx}`}>
+                    <td className="muted" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, whiteSpace: 'nowrap' }} title={r.ids.join(', ')}>
+                      {idDisplay}
+                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
                     <td>
                       {flag} <strong>{r.geo_code || '—'}</strong>
