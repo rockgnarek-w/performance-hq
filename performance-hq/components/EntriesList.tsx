@@ -13,6 +13,39 @@ function formatMoney(n: number) {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace('.', ',')}`;
 }
 
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!value) return null;
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      title={`Copy: ${value}`}
+      style={{
+        marginLeft: 4,
+        padding: '1px 5px',
+        fontSize: 10,
+        background: copied ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.04)',
+        color: copied ? '#4ade80' : '#888',
+        border: 'none',
+        borderRadius: 3,
+        cursor: 'pointer',
+        verticalAlign: 'middle',
+      }}
+    >
+      {copied ? '✓' : '⧉'}
+    </button>
+  );
+}
+
 type CampaignRow = {
   date: string;
   campaign_name: string | null;
@@ -39,17 +72,15 @@ export default function EntriesList({
   const [filterSource, setFilterSource] = useState<string>('all');
   const [search, setSearch] = useState('');
 
-  // Группировка по (date + campaign_name + account_id_fb)
   const grouped: CampaignRow[] = useMemo(() => {
     const map = new Map<string, CampaignRow>();
 
     entries.forEach((e) => {
-      // Фильтры применяем перед группировкой
       if (filterDate && e.date !== filterDate) return;
       if (filterSource !== 'all' && e.source !== filterSource) return;
       if (search) {
         const q = search.toLowerCase();
-        const inFields = [e.campaign_name, e.note, e.account_id_fb, e.geo_code]
+        const inFields = [e.campaign_name, e.note, e.account_id_fb, e.geo_code, e.offers?.crm_id]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q));
         if (!inFields) return;
@@ -77,7 +108,6 @@ export default function EntriesList({
       }
     });
 
-    // Сортируем — последние даты сверху, внутри даты по спенду
     return Array.from(map.values()).sort((a, b) => {
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return b.spend - a.spend;
@@ -95,7 +125,6 @@ export default function EntriesList({
     return Array.from(set).sort().reverse();
   }, [entries]);
 
-  // Сводка
   const totals = grouped.reduce(
     (acc, r) => {
       acc.spend += r.spend;
@@ -143,9 +172,9 @@ export default function EntriesList({
           <table className="entries-table">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Date</th>
                 <th>Geo / Offer</th>
+                <th>CRM ID</th>
                 <th>Campaign</th>
                 <th>Ads</th>
                 <th>Cost</th>
@@ -156,37 +185,38 @@ export default function EntriesList({
             <tbody>
               {grouped.slice(0, 500).map((r, idx) => {
                 const flag = r.geo_code ? FLAGS[r.geo_code] || '🏳️' : '';
-                const idDisplay = r.ids.length === 1 
-                  ? `#${r.ids[0]}` 
-                  : `#${Math.min(...r.ids)}–${Math.max(...r.ids)}`;
                 return (
                   <tr key={`${r.date}-${r.campaign_name}-${idx}`}>
-                    <td className="muted" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 11, whiteSpace: 'nowrap' }} title={r.ids.join(', ')}>
-                      {idDisplay}
-                    </td>
                     <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
                     <td>
                       {flag} <strong>{r.geo_code || '—'}</strong>
                       <span className="muted"> · {r.offer_name}</span>
-                      {r.crm_id && (
-                        <span style={{
-                          marginLeft: 6,
-                          fontSize: 10,
-                          padding: '1px 6px',
-                          borderRadius: 3,
-                          background: 'rgba(212,160,23,0.1)',
-                          color: '#d4a017',
-                          fontFamily: 'ui-monospace, monospace',
-                        }}>
-                          {r.crm_id}
-                        </span>
+                    </td>
+                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
+                      {r.crm_id ? (
+                        <>
+                          <span style={{ color: '#d4a017' }}>{r.crm_id}</span>
+                          <CopyButton value={r.crm_id} />
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
                       )}
                     </td>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                      {r.campaign_name || <span className="muted">—</span>}
+                      {r.campaign_name ? (
+                        <>
+                          {r.campaign_name}
+                          <CopyButton value={r.campaign_name} />
+                        </>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
                     </td>
                     <td className="muted">{r.adCount}</td>
-                    <td><strong>{formatMoney(r.spend)}</strong></td>
+                    <td>
+                      <strong>{formatMoney(r.spend)}</strong>
+                      <CopyButton value={r.spend.toFixed(2)} />
+                    </td>
                     <td>
                       <span style={{
                         fontSize: 10,
@@ -221,7 +251,7 @@ export default function EntriesList({
       )}
 
       <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
-        💡 Сгруппировано по кампаниям. Колонка <strong>Ads</strong> — сколько объявлений было в кампании за этот день. <strong>Cost</strong> — суммарный спенд по всем объявлениям кампании. Удаление сносит все записи кампании за день.
+        💡 Сгруппировано по кампаниям. <strong>⧉</strong> копирует значение в буфер. Удаление сносит все записи кампании за день.
       </p>
     </div>
   );
