@@ -124,7 +124,7 @@ export default function Home() {
 {view === 'add' && (
             <>
               <AddEntryForm offers={offers} onAdded={loadData} />
-              <EntriesList entries={entries} onChanged={loadData} />
+              <EntriesList entries={entries} offers={offers} onChanged={loadData} />
             </>
           )}
         </>
