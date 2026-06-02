@@ -55,6 +55,7 @@ export type Account = {
   id: number;
   account_id_fb: string;
   social_name: string | null;
+  supplier: string | null;
   status: string;
   created_at: string;
 };
