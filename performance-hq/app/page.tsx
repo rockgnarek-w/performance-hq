@@ -115,13 +115,13 @@ export default function Home() {
         </div>
       ) : (
         <>
-          {view === 'daily' && <DailyView entries={entries} offers={offers} />}
-          {view === 'monthly' && <MonthlyView entries={entries} dailyResults={dailyResults} />}
-          {view === 'by-geo' && <ByGeoView entries={entries} dailyResults={dailyResults} />}
-          {view === 'creatives' && <CreativesView offers={offers} entries={entries} />}
-          {view === 'accounts' && <AccountsView />}
-          {view === 'offers' && <OffersView />}
-          {view === 'add' && (
+        {view === 'daily' && <DailyView entries={entries} offers={offers} />}
+{view === 'monthly' && <MonthlyView entries={entries} offers={offers} dailyResults={dailyResults} />}
+{view === 'by-geo' && <ByGeoView entries={entries} offers={offers} dailyResults={dailyResults} />}
+{view === 'creatives' && <CreativesView offers={offers} entries={entries} />}
+{view === 'accounts' && <AccountsView />}
+{view === 'offers' && <OffersView />}
+{view === 'add' && (
             <>
               <AddEntryForm offers={offers} onAdded={loadData} />
               <EntriesList entries={entries} onChanged={loadData} />
