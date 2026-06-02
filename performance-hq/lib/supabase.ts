@@ -20,10 +20,16 @@ export type Entry = {
   date: string;
   account_id_fb: string | null;
   campaign_name: string | null;
+  ad_id: string | null;
+  ad_name: string | null;
+  creative_id: string | null;
   geo_code: string | null;
   offer_id: number | null;
-  creative_id: string | null;
   spend: number;
+  clicks: number;
+  impressions: number;
+  purchases: number;
+  purchase_value: number;
   deposits: number;
   payout_per_dep: number;
   note: string | null;
