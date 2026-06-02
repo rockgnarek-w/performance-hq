@@ -13,9 +13,16 @@ function formatMoney(n: number) {
   return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
 }
 
+function formatMoneyComma(n: number) {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace('.', ',')}`;
+}
+
 type OfferRow = {
   offer: Offer;
   spend: number;
+  clicks: number;
+  fbPurchases: number;
+  fbRevenue: number;
   deposits: number;
   payoutPerDep: number;
   resultId: number | null;
@@ -35,15 +42,19 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
   const loadDay = async (d: string) => {
     setLoading(true);
 
-    // Aggregate spend per offer for selected date
+    // Aggregate spend/clicks/purchases/revenue per offer for selected date
     const dayEntries = entries.filter((e) => e.date === d && e.offer_id !== null);
-    const spendByOffer = new Map<number, number>();
+    const aggByOffer = new Map<number, { spend: number; clicks: number; purchases: number; revenue: number }>();
     dayEntries.forEach((e) => {
-      const cur = spendByOffer.get(e.offer_id!) || 0;
-      spendByOffer.set(e.offer_id!, cur + e.spend);
+      const cur = aggByOffer.get(e.offer_id!) || { spend: 0, clicks: 0, purchases: 0, revenue: 0 };
+      cur.spend += e.spend || 0;
+      cur.clicks += e.clicks || 0;
+      cur.purchases += e.purchases || 0;
+      cur.revenue += e.purchase_value || 0;
+      aggByOffer.set(e.offer_id!, cur);
     });
 
-    // Fetch existing daily_results for this date
+    // Existing daily_results for date
     const { data: results } = await supabase
       .from('daily_results')
       .select('*')
@@ -52,13 +63,11 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
     const resultMap = new Map<number, DailyResult>();
     (results || []).forEach((r) => resultMap.set(r.offer_id, r));
 
-    // Build rows: every offer that has spend OR has saved result for this date
     const offerIds = new Set<number>([
-      ...spendByOffer.keys(),
+      ...aggByOffer.keys(),
       ...Array.from(resultMap.keys()),
     ]);
 
-    // Find last payout per offer (for default value)
     const { data: lastPayouts } = await supabase
       .from('daily_results')
       .select('offer_id, payout_per_dep')
@@ -77,9 +86,13 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
       const offer = offers.find((o) => o.id === offerId);
       if (!offer) continue;
       const existing = resultMap.get(offerId);
+      const agg = aggByOffer.get(offerId) || { spend: 0, clicks: 0, purchases: 0, revenue: 0 };
       newRows.push({
         offer,
-        spend: spendByOffer.get(offerId) || 0,
+        spend: agg.spend,
+        clicks: agg.clicks,
+        fbPurchases: agg.purchases,
+        fbRevenue: agg.revenue,
         deposits: existing?.deposits ?? 0,
         payoutPerDep: existing?.payout_per_dep ?? lastPayoutMap.get(offerId) ?? 300,
         resultId: existing?.id ?? null,
@@ -88,7 +101,6 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
       });
     }
 
-    // Sort by spend descending
     newRows.sort((a, b) => b.spend - a.spend);
 
     setRows(newRows);
@@ -119,10 +131,8 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
     };
 
     if (row.resultId) {
-      // update
       await supabase.from('daily_results').update(payload).eq('id', row.resultId);
     } else {
-      // upsert (in case constraint kicks in)
       const { data } = await supabase
         .from('daily_results')
         .upsert(payload, { onConflict: 'date,offer_id' })
@@ -155,6 +165,23 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
 
   const dirtyCount = rows.filter((r) => r.dirty).length;
 
+  // Сводка по дню
+  const totals = rows.reduce(
+    (acc, r) => {
+      const revenue = r.deposits * r.payoutPerDep;
+      acc.spend += r.spend;
+      acc.clicks += r.clicks;
+      acc.fbPurchases += r.fbPurchases;
+      acc.fbRevenue += r.fbRevenue;
+      acc.deposits += r.deposits;
+      acc.revenue += revenue;
+      return acc;
+    },
+    { spend: 0, clicks: 0, fbPurchases: 0, fbRevenue: 0, deposits: 0, revenue: 0 }
+  );
+  const totalProfit = totals.revenue - totals.spend;
+  const totalROI = totals.spend > 0 ? (totalProfit / totals.spend) * 100 : 0;
+
   return (
     <>
       <div className="card">
@@ -170,6 +197,35 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
           <button className="nav-btn" onClick={() => setDate(today)}>Today</button>
         </div>
       </div>
+
+      {/* Сводные карточки по дню */}
+      {rows.length > 0 && (
+        <div className="stats-grid">
+          <div className="stat">
+            <div className="stat-label">Spend</div>
+            <div className="stat-value">{formatMoney(totals.spend)}</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">FB Revenue</div>
+            <div className="stat-value">{formatMoney(totals.fbRevenue)}</div>
+            <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>pixel · ~85%</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Real Revenue</div>
+            <div className="stat-value">{formatMoney(totals.revenue)}</div>
+            <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>from partner</div>
+          </div>
+          <div className="stat">
+            <div className="stat-label">Profit / ROI</div>
+            <div className={`stat-value ${totalProfit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
+              {totalProfit >= 0 ? '+' : ''}{formatMoney(totalProfit)}
+            </div>
+            <div className={`muted ${totalProfit >= 0 ? 'profit-positive' : 'profit-negative'}`} style={{ fontSize: 11, marginTop: 2 }}>
+              {totals.spend > 0 ? `${totalROI.toFixed(0)}%` : '—'}
+            </div>
+          </div>
+        </div>
+      )}
 
       {savedMessage && <div className="alert alert-success">{savedMessage}</div>}
 
@@ -196,7 +252,10 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
                 <tr>
                   <th>Offer</th>
                   <th>Spend</th>
-                  <th style={{ width: 100 }}>Deps</th>
+                  <th>Clicks</th>
+                  <th title="Purchases from FB pixel (~85% accuracy)">FB Pur</th>
+                  <th title="FB pixel revenue">FB Rev</th>
+                  <th style={{ width: 100 }}>Deps (real)</th>
                   <th style={{ width: 120 }}>Payout / Dep</th>
                   <th>Revenue</th>
                   <th>Profit</th>
@@ -217,7 +276,14 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
                         {flag} <strong>{r.offer.country_name}</strong>
                         <span className="muted"> — {r.offer.offer_name}</span>
                       </td>
-                      <td>{formatMoney(r.spend)}</td>
+                      <td>{formatMoneyComma(r.spend)}</td>
+                      <td>{r.clicks}</td>
+                      <td style={{ color: r.fbPurchases > 0 ? '#4ade80' : 'inherit' }}>
+                        {r.fbPurchases || '—'}
+                      </td>
+                      <td style={{ color: r.fbRevenue > 0 ? '#4ade80' : 'inherit' }}>
+                        {r.fbRevenue > 0 ? formatMoney(r.fbRevenue) : '—'}
+                      </td>
                       <td>
                         <input
                           type="number"
@@ -265,6 +331,10 @@ export default function DailyView({ entries, offers }: { entries: Entry[]; offer
             </table>
           </div>
         )}
+
+        <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
+          💡 <strong>FB Pur / FB Rev</strong> — данные из Facebook Pixel (показывают сразу, точность ~85%). <strong>Deps (real)</strong> — реальные депы от партнёрки (ты вводишь, 100% точность).
+        </p>
       </div>
     </>
   );
