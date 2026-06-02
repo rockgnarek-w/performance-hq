@@ -12,6 +12,10 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 
 const STATUS_CYCLE = ['active', 'paused', 'banned', 'deleted'];
 
+// Список поставщиков/агентств для учёта (бухгалтерия).
+// Добавить нового — просто допиши строку в этот массив.
+const SUPPLIERS = ['Lux Media', 'AdNex', 'BLA'];
+
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   if (!value) return null;
@@ -46,12 +50,14 @@ export default function AccountsView() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterSupplier, setFilterSupplier] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
   // Add form state
   const [newAccountId, setNewAccountId] = useState('');
   const [newSocialName, setNewSocialName] = useState('');
+  const [newSupplier, setNewSupplier] = useState('');
   const [newStatus, setNewStatus] = useState('active');
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -74,16 +80,20 @@ export default function AccountsView() {
   const filtered = useMemo(() => {
     return accounts.filter((a) => {
       if (filterStatus !== 'all' && a.status !== filterStatus) return false;
+      if (filterSupplier !== 'all') {
+        if (filterSupplier === 'none' && a.supplier) return false;
+        if (filterSupplier !== 'none' && a.supplier !== filterSupplier) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
-        const inFields = [a.account_id_fb, a.social_name]
+        const inFields = [a.account_id_fb, a.social_name, a.supplier]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q));
         if (!inFields) return false;
       }
       return true;
     });
-  }, [accounts, filterStatus, search]);
+  }, [accounts, filterStatus, filterSupplier, search]);
 
   const counts = useMemo(() => {
     return {
@@ -99,6 +109,15 @@ export default function AccountsView() {
     const currentIdx = STATUS_CYCLE.indexOf(acc.status);
     const nextStatus = STATUS_CYCLE[(currentIdx + 1) % STATUS_CYCLE.length];
     await supabase.from('accounts').update({ status: nextStatus }).eq('id', acc.id);
+    load();
+  };
+
+  // Сменить поставщика прямо в таблице (без открытия формы)
+  const changeSupplier = async (acc: Account, supplier: string) => {
+    await supabase
+      .from('accounts')
+      .update({ supplier: supplier || null })
+      .eq('id', acc.id);
     load();
   };
 
@@ -121,6 +140,7 @@ export default function AccountsView() {
     const { error } = await supabase.from('accounts').insert({
       account_id_fb: cleanId,
       social_name: newSocialName.trim() || null,
+      supplier: newSupplier || null,
       status: newStatus,
     });
 
@@ -132,6 +152,7 @@ export default function AccountsView() {
 
     setNewAccountId('');
     setNewSocialName('');
+    setNewSupplier('');
     setNewStatus('active');
     setShowAdd(false);
     setAdding(false);
@@ -166,11 +187,23 @@ export default function AccountsView() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="🔍 Search by FB ID or social name..."
+            placeholder="🔍 Search by FB ID, social name, supplier..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ flex: 1, minWidth: 200, padding: '8px 12px' }}
           />
+
+          <select
+            value={filterSupplier}
+            onChange={(e) => setFilterSupplier(e.target.value)}
+            style={{ width: 'auto', padding: '8px 12px' }}
+          >
+            <option value="all">All suppliers</option>
+            {SUPPLIERS.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+            <option value="none">⚠ No supplier</option>
+          </select>
 
           <select
             value={filterStatus}
@@ -196,7 +229,7 @@ export default function AccountsView() {
         {/* Форма добавления */}
         {showAdd && (
           <div style={{ marginTop: 16, padding: 16, background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 150px auto', gap: 10, alignItems: 'end' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 150px 130px auto', gap: 10, alignItems: 'end' }}>
               <div>
                 <label className="muted" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
                   FB Account ID (без act_)
@@ -220,6 +253,17 @@ export default function AccountsView() {
                   placeholder="Yan Cuprin, Юлия Янчук..."
                   style={{ padding: '8px 12px' }}
                 />
+              </div>
+              <div>
+                <label className="muted" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
+                  Supplier <span style={{ color: '#d4a017' }}>★</span>
+                </label>
+                <select value={newSupplier} onChange={(e) => setNewSupplier(e.target.value)} style={{ padding: '8px 12px' }}>
+                  <option value="">— Supplier —</option>
+                  {SUPPLIERS.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="muted" style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
@@ -267,6 +311,7 @@ export default function AccountsView() {
                 <tr>
                   <th>FB Account ID</th>
                   <th>Social Profile</th>
+                  <th>Supplier</th>
                   <th>Status</th>
                   <th>Added</th>
                   <th></th>
@@ -282,6 +327,29 @@ export default function AccountsView() {
                         <CopyButton value={`act_${a.account_id_fb}`} />
                       </td>
                       <td>{a.social_name || <span className="muted">—</span>}</td>
+                      <td>
+                        {/* Поставщик можно сменить прямо тут, без формы */}
+                        <select
+                          value={a.supplier || ''}
+                          onChange={(e) => changeSupplier(a, e.target.value)}
+                          title="Сменить поставщика"
+                          style={{
+                            padding: '3px 8px',
+                            fontSize: 12,
+                            background: a.supplier ? 'rgba(212,160,23,0.1)' : 'rgba(239,68,68,0.08)',
+                            color: a.supplier ? '#d4a017' : '#ef4444',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                            width: 'auto',
+                          }}
+                        >
+                          <option value="">⚠ не задан</option>
+                          {SUPPLIERS.map((s) => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td>
                         <button
                           onClick={() => cycleStatus(a)}
@@ -325,7 +393,7 @@ export default function AccountsView() {
         )}
 
         <p className="muted" style={{ fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-          💡 <strong>Клик на статус</strong> — циклически переключает: Active → Paused → Banned → Deleted. Только аккаунты со статусом <strong>active</strong> попадают в auto-import. <strong>🗑</strong> — полное удаление из БД (необратимо, лучше используй статус "deleted").
+          💡 <strong>Клик на статус</strong> — циклически переключает: Active → Paused → Banned → Deleted. Только аккаунты со статусом <strong>active</strong> попадают в auto-import. <strong>Supplier</strong> — поставщик/агентство для учёта; можно сменить прямо в строке. <strong>🗑</strong> — полное удаление из БД (необратимо, лучше используй статус "deleted").
         </p>
       </div>
     </>
