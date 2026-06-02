@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { supabase, Entry, Offer } from '@/lib/supabase';
 
 const FLAGS: Record<string, string> = {
@@ -72,6 +72,37 @@ export default function EntriesList({
   const [filterSource, setFilterSource] = useState<string>('all');
   const [search, setSearch] = useState('');
 
+  // Карта account_id_fb -> supplier (поставщик/агентство), тянем из accounts
+  const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    supabase
+      .from('accounts')
+      .select('account_id_fb, supplier')
+      .then(({ data }) => {
+        const m: Record<string, string> = {};
+        (data || []).forEach((a: any) => {
+          if (a.account_id_fb) m[String(a.account_id_fb)] = a.supplier || '';
+        });
+        setSupplierMap(m);
+      });
+  }, []);
+
+  // Достаём account_id из записи: сперва поле, иначе из начала названия кампании
+  const resolveAccountId = (accountId: string | null, campaignName: string | null): string | null => {
+    if (accountId) return String(accountId);
+    if (campaignName) {
+      const m = campaignName.match(/^(\d{6,})/);
+      if (m) return m[1];
+    }
+    return null;
+  };
+
+  const supplierFor = (accountId: string | null, campaignName: string | null): string => {
+    const id = resolveAccountId(accountId, campaignName);
+    return id ? supplierMap[id] || '' : '';
+  };
+
   const grouped: CampaignRow[] = useMemo(() => {
     const map = new Map<string, CampaignRow>();
 
@@ -80,7 +111,8 @@ export default function EntriesList({
       if (filterSource !== 'all' && e.source !== filterSource) return;
       if (search) {
         const q = search.toLowerCase();
-        const inFields = [e.campaign_name, e.note, e.account_id_fb, e.geo_code, e.offers?.crm_id]
+        const supplierName = supplierFor(e.account_id_fb, e.campaign_name);
+        const inFields = [e.campaign_name, e.note, e.account_id_fb, e.geo_code, e.offers?.crm_id, supplierName]
           .filter(Boolean)
           .some((v) => v!.toLowerCase().includes(q));
         if (!inFields) return;
@@ -112,7 +144,7 @@ export default function EntriesList({
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return b.spend - a.spend;
     });
-  }, [entries, filterDate, filterSource, search]);
+  }, [entries, filterDate, filterSource, search, supplierMap]);
 
   const handleDeleteCampaign = async (row: CampaignRow) => {
     if (!confirm(`Delete ${row.adCount} entr${row.adCount === 1 ? 'y' : 'ies'} for "${row.campaign_name || '—'}" on ${row.date}?`)) return;
@@ -176,6 +208,7 @@ export default function EntriesList({
                 <th>Geo / Offer</th>
                 <th>CRM ID</th>
                 <th>Campaign</th>
+                <th>Supplier</th>
                 <th>Ads</th>
                 <th>Cost</th>
                 <th>Src</th>
@@ -211,6 +244,25 @@ export default function EntriesList({
                       ) : (
                         <span className="muted">—</span>
                       )}
+                    </td>
+                    <td>
+                      {(() => {
+                        const supplier = supplierFor(r.account_id_fb, r.campaign_name);
+                        return supplier ? (
+                          <span style={{
+                            fontSize: 11,
+                            padding: '2px 8px',
+                            borderRadius: 4,
+                            whiteSpace: 'nowrap',
+                            background: 'rgba(212,160,23,0.1)',
+                            color: '#d4a017',
+                          }}>
+                            {supplier}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        );
+                      })()}
                     </td>
                     <td className="muted">{r.adCount}</td>
                     <td>
