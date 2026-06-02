@@ -19,6 +19,7 @@ type CampaignRow = {
   account_id_fb: string | null;
   geo_code: string | null;
   offer_name: string;
+  crm_id: string;
   source: string;
   spend: number;
   adCount: number;
@@ -67,6 +68,7 @@ export default function EntriesList({
           account_id_fb: e.account_id_fb,
           geo_code: e.geo_code,
           offer_name: e.offers?.offer_name || (e.offer_id === null ? '—' : '?'),
+          crm_id: e.offers?.crm_id || '',
           source: e.source,
           spend: e.spend || 0,
           adCount: 1,
@@ -166,6 +168,19 @@ export default function EntriesList({
                     <td>
                       {flag} <strong>{r.geo_code || '—'}</strong>
                       <span className="muted"> · {r.offer_name}</span>
+                      {r.crm_id && (
+                        <span style={{
+                          marginLeft: 6,
+                          fontSize: 10,
+                          padding: '1px 6px',
+                          borderRadius: 3,
+                          background: 'rgba(212,160,23,0.1)',
+                          color: '#d4a017',
+                          fontFamily: 'ui-monospace, monospace',
+                        }}>
+                          {r.crm_id}
+                        </span>
+                      )}
                     </td>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
                       {r.campaign_name || <span className="muted">—</span>}
