@@ -48,7 +48,6 @@ function CopyButton({ value }: { value: string }) {
 
 type CampaignRow = {
   date: string;
-  campaign_name: string | null;
   account_id_fb: string | null;
   geo_code: string | null;
   offer_name: string;
@@ -56,6 +55,7 @@ type CampaignRow = {
   source: string;
   spend: number;
   adCount: number;
+  campaignCount: number;
   ids: number[];
 };
 
@@ -105,6 +105,7 @@ export default function EntriesList({
 
   const grouped: CampaignRow[] = useMemo(() => {
     const map = new Map<string, CampaignRow>();
+    const campaignsByKey = new Map<string, Set<string>>();
 
     entries.forEach((e) => {
       if (filterDate && e.date !== filterDate) return;
@@ -118,16 +119,28 @@ export default function EntriesList({
         if (!inFields) return;
       }
 
-      const key = `${e.date}|${e.campaign_name || '—'}|${e.account_id_fb || '—'}`;
+      // Группировка по КАБ + ОФЕР (а не по отдельной кампании):
+      // все кампании одного каба с одним офером схлопываются в одну строку.
+      const offerKey = e.offer_id != null ? `o${e.offer_id}` : (e.offers?.crm_id || '—');
+      const key = `${e.date}|${e.account_id_fb || '—'}|${offerKey}`;
+
+      // считаем уникальные кампании внутри группы
+      let cset = campaignsByKey.get(key);
+      if (!cset) {
+        cset = new Set<string>();
+        campaignsByKey.set(key, cset);
+      }
+      if (e.campaign_name) cset.add(e.campaign_name);
+
       const cur = map.get(key);
       if (cur) {
         cur.spend += e.spend || 0;
         cur.adCount += 1;
         cur.ids.push(e.id);
+        cur.campaignCount = cset.size;
       } else {
         map.set(key, {
           date: e.date,
-          campaign_name: e.campaign_name,
           account_id_fb: e.account_id_fb,
           geo_code: e.geo_code,
           offer_name: e.offers?.offer_name || (e.offer_id === null ? '—' : '?'),
@@ -135,6 +148,7 @@ export default function EntriesList({
           source: e.source,
           spend: e.spend || 0,
           adCount: 1,
+          campaignCount: cset.size,
           ids: [e.id],
         });
       }
@@ -147,7 +161,7 @@ export default function EntriesList({
   }, [entries, filterDate, filterSource, search, supplierMap]);
 
   const handleDeleteCampaign = async (row: CampaignRow) => {
-    if (!confirm(`Delete ${row.adCount} entr${row.adCount === 1 ? 'y' : 'ies'} for "${row.campaign_name || '—'}" on ${row.date}?`)) return;
+    if (!confirm(`Delete ${row.adCount} entr${row.adCount === 1 ? 'y' : 'ies'} for account act_${row.account_id_fb || '—'} · ${row.offer_name} on ${row.date}?`)) return;
     await supabase.from('entries').delete().in('id', row.ids);
     onChanged();
   };
@@ -219,7 +233,7 @@ export default function EntriesList({
               {grouped.slice(0, 500).map((r, idx) => {
                 const flag = r.geo_code ? FLAGS[r.geo_code] || '🏳️' : '';
                 return (
-                  <tr key={`${r.date}-${r.campaign_name}-${idx}`}>
+                  <tr key={`${r.date}-${r.account_id_fb}-${r.crm_id}-${idx}`}>
                     <td style={{ whiteSpace: 'nowrap' }}>{r.date}</td>
                     <td>
                       {flag} <strong>{r.geo_code || '—'}</strong>
@@ -236,10 +250,15 @@ export default function EntriesList({
                       )}
                     </td>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                      {r.campaign_name ? (
+                      {r.account_id_fb ? (
                         <>
-                          {r.campaign_name}
-                          <CopyButton value={r.campaign_name} />
+                          <span style={{ color: '#d4a017' }}>act_{r.account_id_fb}</span>
+                          <CopyButton value={`act_${r.account_id_fb}`} />
+                          {r.campaignCount > 1 && (
+                            <span className="muted" style={{ fontSize: 10, marginLeft: 6 }}>
+                              · {r.campaignCount} camp.
+                            </span>
+                          )}
                         </>
                       ) : (
                         <span className="muted">—</span>
@@ -247,7 +266,7 @@ export default function EntriesList({
                     </td>
                     <td>
                       {(() => {
-                        const supplier = supplierFor(r.account_id_fb, r.campaign_name);
+                        const supplier = supplierFor(r.account_id_fb, null);
                         return supplier ? (
                           <span style={{
                             fontSize: 11,
