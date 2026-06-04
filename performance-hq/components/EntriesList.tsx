@@ -56,6 +56,7 @@ type CampaignRow = {
   spend: number;
   adCount: number;
   campaignCount: number;
+  campaignName: string; // имя одной (первой) кампании группы — для отображения
   ids: number[];
 };
 
@@ -149,8 +150,18 @@ export default function EntriesList({
           spend: e.spend || 0,
           adCount: 1,
           campaignCount: cset.size,
+          campaignName: '',
           ids: [e.id],
         });
+      }
+    });
+
+    // У каждой группы берём имя ОДНОЙ кампании (первой по сортировке —
+    // обычно это ..._1) для отображения вместо act_id.
+    map.forEach((row, key) => {
+      const cset = campaignsByKey.get(key);
+      if (cset && cset.size) {
+        row.campaignName = Array.from(cset).sort()[0];
       }
     });
 
@@ -250,15 +261,20 @@ export default function EntriesList({
                       )}
                     </td>
                     <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12 }}>
-                      {r.account_id_fb ? (
+                      {r.campaignName ? (
                         <>
-                          <span style={{ color: '#d4a017' }}>act_{r.account_id_fb}</span>
-                          <CopyButton value={`act_${r.account_id_fb}`} />
+                          <span style={{ color: '#d4a017' }}>{r.campaignName}</span>
+                          <CopyButton value={r.campaignName} />
                           {r.campaignCount > 1 && (
                             <span className="muted" style={{ fontSize: 10, marginLeft: 6 }}>
                               · {r.campaignCount} camp.
                             </span>
                           )}
+                        </>
+                      ) : r.account_id_fb ? (
+                        <>
+                          <span style={{ color: '#d4a017' }}>act_{r.account_id_fb}</span>
+                          <CopyButton value={`act_${r.account_id_fb}`} />
                         </>
                       ) : (
                         <span className="muted">—</span>
