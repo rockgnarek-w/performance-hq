@@ -23,29 +23,46 @@ export default function AddEntryForm({
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   const handleSubmit = async () => {
-    if (!offerId) {
-      setMessage({ type: 'error', text: 'Select an offer' });
-      return;
-    }
+  if (submitting) return; // двойная защита от повторного клика
 
-    const offer = offers.find((o) => o.id.toString() === offerId);
-    if (!offer) return;
+  if (!offerId) {
+    setMessage({ type: 'error', text: 'Select an offer' });
+    return;
+  }
 
-    setSubmitting(true);
-    setMessage(null);
+  const offer = offers.find((o) => o.id.toString() === offerId);
+  if (!offer) return;
 
-    const { error } = await supabase.from('entries').insert({
-      date,
-      offer_id: parseInt(offerId),
-      geo_code: offer.geo_code,
-      spend: parseFloat(spend) || 0,
-      deposits: parseInt(deposits) || 0,
-      payout_per_dep: parseFloat(payoutPerDep) || 0,
-      account_id_fb: accountId || null,
-      note: note || null,
-      source: 'manual',
-    });
+  setSubmitting(true);
+  setMessage(null);
 
+  const { error } = await supabase.from('entries').insert({
+    date,
+    offer_id: parseInt(offerId),
+    geo_code: offer.geo_code,
+    spend: parseFloat(spend) || 0,
+    deposits: parseInt(deposits) || 0,
+    payout_per_dep: parseFloat(payoutPerDep) || 0,
+    account_id_fb: accountId || null,
+    note: note || null,
+    source: 'manual',
+  });
+
+  setSubmitting(false);
+
+  if (error) {
+    setMessage({ type: 'error', text: error.message });
+  } else {
+    // показываем дату, на которую реально ушла запись
+    setMessage({ type: 'success', text: `Добавлено на ${date}` });
+    setSpend('');
+    setDeposits('');
+    setAccountId('');
+    setNote('');
+    onAdded();
+    setTimeout(() => setMessage(null), 3000);
+  }
+};
     setSubmitting(false);
 
     if (error) {
