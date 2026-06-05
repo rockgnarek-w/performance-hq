@@ -6,7 +6,7 @@ import { supabase, Entry, Offer } from '@/lib/supabase';
 const FLAGS: Record<string, string> = {
   AU: '🇦🇺', CA: '🇨🇦', UK: '🇬🇧', GB: '🇬🇧',
   FR: '🇫🇷', DE: '🇩🇪', IT: '🇮🇹', ES: '🇪🇸',
-  NL: '🇳🇱', PL: '🇵🇱', US: '🇺🇸',
+  NL: '🇳🇱', PL: '🇵🇱', US: '🇺🇸', NZ: '🇳🇿',
 };
 
 function formatMoney(n: number) {
