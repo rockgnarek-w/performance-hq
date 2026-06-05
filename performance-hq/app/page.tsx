@@ -51,8 +51,8 @@ export default function Home() {
     const { data: entriesData } = await supabase
       .from('entries')
       .select('*, offers(*)')
-      .order('date', { ascending: false })
-      .limit(2000);
+      .order('id', { ascending: false })
+      .limit(5000);
 
     const { data: offersData } = await supabase
       .from('offers')
