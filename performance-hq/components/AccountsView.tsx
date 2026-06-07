@@ -14,7 +14,7 @@ const STATUS_CYCLE = ['active', 'paused', 'banned', 'deleted'];
 
 // Список поставщиков/агентств для учёта (бухгалтерия).
 // Добавить нового — просто допиши строку в этот массив.
-const SUPPLIERS = ['Lux Media', 'AdNex', 'BLA'];
+const SUPPLIERS = ['Lux Media', 'AdNex', 'BLA', 'BLUE'];
 
 function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
